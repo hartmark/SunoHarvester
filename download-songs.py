@@ -272,7 +272,7 @@ def download_song(page, card, download_dir, format_button: str, final_basename: 
 
     return os.path.basename(filepath)
 
-def _process_current_page(page, songs_json: List[Dict], download_dir: str, download_video: bool = False) -> int:
+def _process_current_page(page, songs_json: List[Dict], download_dir: str, download_video: bool = False, page_index: int = 1) -> int:
     # Find song cards on the current page and process them
     song_cards = page.get_by_role("button", name=re.compile(r"^Play Song"))
     try:
@@ -286,7 +286,7 @@ def _process_current_page(page, songs_json: List[Dict], download_dir: str, downl
 
     processed = 0
     for i in range(song_count):
-        print(f"--- Processing song {i + 1} of {song_count} ---")
+        print(f"--- Processing song {i + 1} of {song_count} (page {page_index}) ---")
         card = song_cards.nth(i)
 
         id = get_id(card)
@@ -411,7 +411,7 @@ def run(playwright: Playwright, download_video: bool = False, headless: bool = T
     # Process first page and then paginate
     while True:
         print(f"\n=== Page {page_index} ===")
-        processed = _process_current_page(page, songs_json, download_dir, download_video=download_video)
+        processed = _process_current_page(page, songs_json, download_dir, download_video=download_video, page_index=page_index)
         total_processed += processed
         print(f"Processed {processed} songs on page {page_index} (total so far: {total_processed}).")
 
