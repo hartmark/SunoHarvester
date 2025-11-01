@@ -221,7 +221,7 @@ def download_song(page, card, download_dir, format_button: str, final_basename: 
     format_btn = page.get_by_role("button", name=format_button)
     format_btn.wait_for(state="visible", timeout=250)
 
-    timeout_ms = 10000 if format_button == "WAV Audio" else 120000
+    timeout_ms = 15000 if format_button == "WAV Audio" else 120000
     # Wait for the download according to how each format triggers it
     start_time = time.perf_counter()
     try:
