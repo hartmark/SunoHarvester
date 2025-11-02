@@ -272,7 +272,7 @@ def download_song(page, card, download_dir, format_button: str, final_basename: 
 
     return os.path.basename(filepath)
 
-def _process_current_page(page, songs_json: List[Dict], download_dir: str, download_video: bool = False, page_index: int = 1) -> int:
+def _process_current_page(page, songs_json: List[Dict], download_dir: str, download_video: bool = False, download_mp3: bool = True, page_index: int = 1) -> int:
     # Find song cards on the current page and process them
     song_cards = page.get_by_role("button", name=re.compile(r"^Play Song"))
     try:
@@ -324,7 +324,10 @@ def _process_current_page(page, songs_json: List[Dict], download_dir: str, downl
         final_basename = f"{persona_name} - {title} - {id}" if persona_name else f"{title} - {id}"
         localFiles = []
         wav_filename = None
-        btns = ["MP3 Audio", "WAV Audio"]
+        # Build list of formats to download
+        btns = ["WAV Audio"]
+        if download_mp3:
+            btns.insert(0, "MP3 Audio")
         if download_video:
             btns.append("Video")
         for btn in btns:
@@ -361,7 +364,7 @@ def _process_current_page(page, songs_json: List[Dict], download_dir: str, downl
     return processed
 
 
-def run(playwright: Playwright, download_video: bool = False, headless: bool = True, browser_name: str = "firefox") -> None:
+def run(playwright: Playwright, download_video: bool = False, headless: bool = True, browser_name: str = "firefox", download_mp3: bool = True) -> None:
     # Ensure metadata file exists (create empty array if missing)
     if not os.path.exists(JSON_FILE):
         save_songs([])
@@ -411,7 +414,7 @@ def run(playwright: Playwright, download_video: bool = False, headless: bool = T
     # Process first page and then paginate
     while True:
         print(f"\n=== Page {page_index} ===")
-        processed = _process_current_page(page, songs_json, download_dir, download_video=download_video, page_index=page_index)
+        processed = _process_current_page(page, songs_json, download_dir, download_video=download_video, download_mp3=download_mp3, page_index=page_index)
         total_processed += processed
         print(f"Processed {processed} songs on page {page_index} (total so far: {total_processed}).")
 
@@ -467,6 +470,11 @@ def parse_args() -> argparse.Namespace:
         default="firefox",
         help="Browser engine to use (default: firefox).",
     )
+    parser.add_argument(
+        "--nomp3",
+        action="store_true",
+        help="Disable downloading MP3 files (download only WAV and optionally Video)",
+    )
     return parser.parse_args()
 
 
@@ -478,4 +486,5 @@ if __name__ == "__main__":
             download_video=args.videos,
             headless=(not args.headed),
             browser_name=args.browser,
+            download_mp3=(not args.nomp3),
         )
