@@ -133,28 +133,36 @@ def get_style(card) -> str:
 
     return ""
 
-def get_persona(card) -> Tuple[str, str]:
+def get_persona(card) -> Tuple[Optional[str], Optional[str]]:
     """
     Extract persona name and URL from a song card.
 
     Strategy:
     - Find the anchor inside the card whose href starts with "/persona/".
     - Persona name: anchor text or `title` attribute.
+
+    Returns (None, None) when persona is not present so JSON serializes `null`.
     """
     # Locate the persona anchor
     a = card.locator("a[href^='/persona/']").first
     if a.count() == 0:
-        return "", ""
+        return None, None
 
     name = (a.inner_text() or "").strip()
     if not name:
         name = (a.get_attribute("title") or "").strip()
+    if not name:
+        name = None
 
     href = (a.get_attribute("href") or "").strip()
-    if href and href.startswith("/"):
-        url = f"https://suno.com{href}"
+    url: Optional[str]
+    if href:
+        if href.startswith("/"):
+            url = f"https://suno.com{href}"
+        else:
+            url = href
     else:
-        url = href
+        url = None
 
     return name, url
 
@@ -192,12 +200,16 @@ def _sanitize_filename(name: str) -> str:
     return name
 
 
-def download_song(page, card, download_dir, format_button: str, final_basename: Optional[str] = None) -> str:
+def download_song(page, card, download_dir, format_button: str, final_basename: Optional[str] = None) -> Optional[str]:
     """
     Download the song using the given submenu button name and ensure the saved
     file extension matches the chosen button.
 
     format_button must be one of: "MP3 Audio", "WAV Audio", "Video".
+
+    Behavior on failures:
+    - For "Video": failures (e.g., timeout/save errors) are handled here: a warning is printed and the function returns None so callers can continue.
+    - For "MP3 Audio" and "WAV Audio": exceptions are propagated to signal hard failures.
     """
     # Map the submenu button to desired file extension
     ext_map = {
@@ -213,7 +225,7 @@ def download_song(page, card, download_dir, format_button: str, final_basename: 
     card.click(button='right')
 
     download_button_in_menu = page.get_by_role("button", name="Download")
-    download_button_in_menu.wait_for(state="visible", timeout=250)
+    download_button_in_menu.wait_for(state="visible", timeout=500)
     download_button_in_menu.hover()
     download_button_in_menu.click()
 
@@ -221,7 +233,7 @@ def download_song(page, card, download_dir, format_button: str, final_basename: 
     format_btn = page.get_by_role("button", name=format_button)
     format_btn.wait_for(state="visible", timeout=250)
 
-    timeout_ms = 15000 if format_button == "WAV Audio" else 120000
+    timeout_ms = 20000 if format_button == "WAV Audio" else 120000
     # Wait for the download according to how each format triggers it
     start_time = time.perf_counter()
     try:
@@ -243,6 +255,9 @@ def download_song(page, card, download_dir, format_button: str, final_basename: 
                 format_btn.click()
                 
     except PlaywrightTimeoutError as e:
+        if format_button == "Video":
+            print(f"Warning: failed to download Video: timed out after {timeout_ms} ms. You can retry later with --videos.")
+            return None
         raise PlaywrightTimeoutError(f"Timed out waiting for {format_button} download after {timeout_ms} ms. ") from e
 
     download = download_info.value
@@ -299,10 +314,11 @@ def _process_current_page(page, songs_json: List[Dict], download_dir: str, downl
                 has_mp4 = any(str(local_file).lower().endswith(".mp4") for local_file in local_files)
                 if not has_mp4:
                     video_file = download_song(page, card, download_dir, "Video")
-                    local_files.append(video_file)
-                    existing["localFiles"] = local_files
-                    upsert_song(songs_json, existing)
-                    save_songs(songs_json)
+                    if video_file:
+                        local_files.append(video_file)
+                        existing["localFiles"] = local_files
+                        upsert_song(songs_json, existing)
+                        save_songs(songs_json)
             # In all cases, skip further processing for this card
             print(f"Song {id} already exists in JSON store. Skipping.")
             continue
@@ -332,12 +348,9 @@ def _process_current_page(page, songs_json: List[Dict], download_dir: str, downl
             btns.append("Video")
         for btn in btns:
             if btn == "Video":
-                try:
-                    fn = download_song(page, card, download_dir, btn, final_basename)
+                fn = download_song(page, card, download_dir, btn, final_basename)
+                if fn:
                     localFiles.append(fn)
-                except Exception as e:
-                    print(f"Warning: failed to download Video for new song {id}: {e}")
-                    continue
             else:
                 fn = download_song(page, card, download_dir, btn, final_basename)
                 localFiles.append(fn)
