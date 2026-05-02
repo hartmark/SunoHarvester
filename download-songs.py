@@ -103,8 +103,6 @@ class SongCard:
         else:
              raise FatalError("'Show Less' button not visible, panel not expanded")
 
-        page.screenshot(path="creation_date_hover.png")
-
         try:
             self.style = (page.locator("div[data-panel='true'] button[aria-label='Copy styles to clipboard']")
                           .locator("xpath=preceding-sibling::div[1]")
@@ -224,7 +222,6 @@ def download_mp3_file(page, card_element, final_basename: str) -> str | None:
     download_btn.click()
     page.wait_for_timeout(1_000)
 
-    page.screenshot(path="01_menu_open.png")
     with page.expect_download(timeout=30_000) as download_info:
         page.get_by_role("button", name="MP3 Audio").click()
 
@@ -273,20 +270,22 @@ def download_wav_file(page, card_element, final_basename: str):
 def download_video_file(page, card_element, final_basename: str) -> str | None:
     # noinspection PyBroadException
     try:
-        card_element.get_by_label("More options").click(timeout=2_000)
-        page.get_by_role("button", name="Download").hover(timeout=1_000)
+        # open menu
+        card_element.get_by_label("More options").click()
+
+        download_btn = page.get_by_role("button", name="Download")
+        download_btn.click()
+        page.wait_for_timeout(1_000)
 
         with page.expect_download(timeout=30_000) as download_info:
             page.get_by_role("button", name="Video").click()
-            dl_btn = page.get_by_role("button", name="Download File")
-            dl_btn.wait_for(state="visible", timeout=10_000)
-            dl_btn.click(timeout=10_000)
         
         download = download_info.value
         filename = final_basename + ".mp4"
         download.save_as(os.path.join("downloads", _sanitize_filename(filename)))
         return filename
     except Exception as e:
+        print(e)
         print(f"Failed to download video, try again later.")
         return None
 
@@ -399,6 +398,7 @@ def run(pw: Playwright, do_download_video: bool = False, headless: bool = True, 
     print(f"Saving files to: {download_dir}")
 
     print("Waiting for page content to load...")
+
     try:
         page.get_by_text("Library", exact=False).wait_for(timeout=10_000)
     except Exception as exc:
@@ -406,6 +406,13 @@ def run(pw: Playwright, do_download_video: bool = False, headless: bool = True, 
         context.close()
         browser.close()
         sys.exit(1)
+
+    # kill cookie consent
+    cookie_consent = page.locator("#onetrust-reject-all-handler")
+    if cookie_consent.count() > 0:
+        cookie_consent.click()
+        print("Clicked cookie consent 'Reject All' button.")
+        page.wait_for_timeout(2_000)
 
     songs_json = load_songs()
     processed_ids = set()
