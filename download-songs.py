@@ -88,20 +88,17 @@ class SongCard:
         show_more = panel.locator("button:has-text('Show More'), div[role='button']:has-text('Show More')").first
         try:
             if show_more.is_visible(timeout=2_000):
-                print(f"Found Show More: {show_more.inner_text()}")
-                show_more.scroll_into_view_if_needed(timeout=1_000)
-                # Click center of the element
                 show_more.click(timeout=2_000, force=True)
-                print("Clicked Show More")
                 page.wait_for_timeout(2_000)
         except Exception as e:
             raise FatalError(f"Show More click failed: {e}")
 
         show_less = panel.get_by_role("button", name="Show Less")
         if show_less.is_visible(timeout=10_000):
-             print("Panel expanded (Show Less visible)")
+            print("Panel expanded (Show Less visible)")
         else:
-             raise FatalError("'Show Less' button not visible, panel not expanded")
+            # changed to warning as sometimes the panel doesn't have a expand/collapse button
+            print("Warning: 'Show Less' button not visible, panel not expanded")
 
         try:
             self.style = (page.locator("div[data-panel='true'] button[aria-label='Copy styles to clipboard']")
@@ -443,8 +440,8 @@ def run(pw: Playwright, do_download_video: bool = False, headless: bool = True, 
         page.keyboard.press("End")
         page.wait_for_timeout(2_000)
 
-        # Check for bottom of page
-        bottom_selector = "div.css-fu18b6.e1vgipf84"
+        # Check for bottom of page - "X songs"
+        bottom_selector = "div.css-tlyfl0.e1jmkiyy5"
         if page.locator(bottom_selector).count() > 0:
             print("Reached the bottom of the page.")
             break
